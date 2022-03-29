@@ -5,3 +5,5 @@
 /.vs/XlsToJson
 /XlsToJson/bin
 /XlsToJson/obj
+/TestXlsToJson/bin/Release/net6.0
+/TestXlsToJson/obj
