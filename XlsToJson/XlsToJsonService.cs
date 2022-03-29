@@ -115,41 +115,97 @@ namespace XlsToJson
             return sheetsNameRelationshipIdPairs;
         }
 
-        internal static SheetData? GetSheetDataByRelationshipId(WorkbookPart workbookPart, string relationshipId)
+        internal static WorksheetPart? GetSheetDataByRelationshipId(WorkbookPart workbookPart, string relationshipId)
         {
-            SheetData? sheetData = null;
+            WorksheetPart? worksheetPart = null;
 
-            foreach (var w in workbookPart.WorksheetParts)
+            foreach (var wp in workbookPart.WorksheetParts)
             {
-                string partRelationshipId = workbookPart.GetIdOfPart(w);
+                string partRelationshipId = workbookPart.GetIdOfPart(wp);
 
                 if (partRelationshipId == relationshipId)
                 {
-                    sheetData = w.Worksheet.Elements<SheetData>().First();
+                     worksheetPart = wp;
                 }
             }
-            return sheetData;
+            return worksheetPart;
         }
 
-        internal static Cell? GetCell(SheetData worksheet, string columnName, uint rowIndex)
-        {
-            Row? row = GetRow(worksheet, rowIndex);
+        internal static Cell? GetCell(WorksheetPart worksheetPart, string columnName, uint rowIndex, bool excludeHiddenRow, bool excludeHiddenColumn)
+        {   
+            Cell? cell = null;
 
-            if (row == null)
+            Row? row = GetRow(worksheetPart, rowIndex);
+
+            if (row == null || excludeHiddenRow && CheckIfCellInHiddenRow(row))
+            {
+                return cell;
+            }
+            cell = row.Elements<Cell>().FirstOrDefault(c => c.CellReference != null && c.CellReference.Value != null && string.Equals(c.CellReference?.Value, columnName + rowIndex, StringComparison.CurrentCultureIgnoreCase));
+            
+            if (cell == null || (cell != null && excludeHiddenColumn && CheckIfCellInHiddenColumn(worksheetPart, row, cell)))
             {
                 return null;
             }
+            return cell;
+
+        }
+
+        internal static bool CheckIfCellInHiddenRow(Row row)
+        {
+            bool isHidden = false;
+
             if (row.Hidden != null && row.Hidden.Value == true)
             {
-                return null;
+               isHidden = true;
             }
-            return row.Elements<Cell>().FirstOrDefault(c => string.Equals(c.CellReference?.Value, columnName + rowIndex, StringComparison.CurrentCultureIgnoreCase));
-
+            return isHidden;
         }
 
-        internal static Row? GetRow(SheetData worksheet, uint rowIndex)
+        internal static bool CheckIfCellInHiddenColumn(WorksheetPart worksheetPart, Row row, Cell cell)
         {
-            return worksheet.Elements<Row>().FirstOrDefault(r => r.RowIndex == rowIndex);
+            bool isHidden = false;
+
+            var columns = worksheetPart.Worksheet.Elements<Columns>().First();
+
+            var hiddenColumnNames = new HashSet<string>();
+
+            foreach (var col in columns.Elements<Column>().Where(c => c.Hidden != null && c.Hidden.Value))
+            {
+                for (uint min = col.Min, max = col.Max; min <= max; min++)
+                {
+                    hiddenColumnNames.Add(GetColumnName(min));
+                }
+            }
+            var column = cell.CellReference?.Value?.Replace(row.RowIndex?.ToString(), "");
+
+            if (column != null && hiddenColumnNames.Contains(column))
+            {
+               isHidden = true;
+            }
+            return isHidden;
+        }
+
+        internal static string GetColumnName(uint columnNumber)
+        {
+            string columnName = "";
+
+            while (columnNumber > 0)
+            {
+                uint modulo = (columnNumber - 1) % 26;
+
+                columnName = Convert.ToChar(65 + modulo).ToString() + columnName;
+
+                columnNumber = (columnNumber - modulo) / 26;
+            }
+            return columnName;
+        }
+
+        internal static Row? GetRow(WorksheetPart worksheetPart, uint rowIndex)
+        {
+            var sheetData = worksheetPart.Worksheet.Elements<SheetData>().First();
+
+            return sheetData.Elements<Row>().FirstOrDefault(r => r.RowIndex == rowIndex);
         }
 
         internal static SharedStringItem? GetSharedStringItemById(WorkbookPart workbookPart, int id)
