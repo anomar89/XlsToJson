@@ -1,6 +1,7 @@
 ﻿using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,6 +11,71 @@ namespace XlsToJson
 {
     internal static class XlsToJsonService
     {
+        internal static string? ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
+        {
+            var bcsJson = string.Empty;
+
+            var filteredDefinedNames = new Dictionary<string, string>();
+
+            var definedNameValuePairs = new Dictionary<string, string>();
+
+            if (workbookPart == null || workbookPart.Workbook == null || workbookPart.Workbook.DefinedNames == null)
+            {
+                return bcsJson;
+            }
+            DefinedNames definedNames = workbookPart.Workbook.DefinedNames;
+
+            filteredDefinedNames = FilterDefinedNamesWithRegex(definedNames, filters);
+
+            if (filteredDefinedNames == null || filteredDefinedNames.Count == 0)
+            {
+                return bcsJson;
+            }
+            var filteredSheets = GetSheetsForFilteredDefinedNames(workbookPart, filteredDefinedNames);
+
+            if (filteredSheets == null || filteredSheets.Count == 0)
+            {
+                return bcsJson;
+            }
+            foreach (var sheet in filteredSheets)
+            {
+                var sheetData = GetSheetDataByRelationshipId(workbookPart, sheet.Value);
+
+                if (sheetData == null)
+                {
+                    continue;
+                }
+                foreach (var definedName in filteredDefinedNames.Where(fdn => fdn.Value.Contains(sheet.Key)))
+                {
+                    if (!definedName.Value.Contains('$'))
+                    {
+                        continue;
+                    }
+                    var columnName = definedName.Value.Split('$', '$')[1];
+
+                    var rowIndex = uint.Parse(definedName.Value[(definedName.Value.LastIndexOf("$") + 1)..]);
+
+                    Cell? cell = GetCell(sheetData, columnName, rowIndex, excludeHiddenRows, excludeHiddenColumns);
+
+                    if (cell == null)
+                    {
+                        continue;
+                    }
+                    var cellValue = GetCellValue(workbookPart, cell);
+
+                    if (definedName.Value.Contains(sheet.Key) && !string.IsNullOrEmpty(cellValue))
+                    {
+                        definedNameValuePairs.Add(definedName.Key, cellValue);
+                    }
+                }
+            }
+            if (definedNameValuePairs != null && definedNameValuePairs.Count > 0)
+            {
+                bcsJson = JsonConvert.SerializeObject(definedNameValuePairs);
+            }
+            return bcsJson;
+        }
+
         internal static Dictionary<string, string> FilterDefinedNamesWithRegex(DefinedNames definedNames, Regex[] filters)
         {
             Dictionary<string, string> filteredDefinedNames = new Dictionary<string, string>();
@@ -80,6 +146,10 @@ namespace XlsToJson
         {
             var sheetsNameRelationshipIdPairs = new Dictionary<string, string>();
 
+            var nameAttribute = "name";
+
+            var idAttribute = "id";
+
             if (workbookPart.Workbook.Sheets != null)
             {
                 foreach (var sheet in workbookPart.Workbook.Sheets)
@@ -90,11 +160,11 @@ namespace XlsToJson
 
                     foreach (OpenXmlAttribute attr in sheet.GetAttributes())
                     {
-                        if (attr.LocalName == "name")
+                        if (attr.LocalName == nameAttribute)
                         {
                             sheetname = attr.Value;
                         }
-                        if (attr.LocalName == "id")
+                        if (attr.LocalName == idAttribute)
                         {
                             relationshipId = attr.Value;
                         }
