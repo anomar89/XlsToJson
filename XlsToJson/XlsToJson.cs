@@ -21,16 +21,16 @@ namespace XlsToJson
             var bcsJson = string.Empty;
             try
             {
-                using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(filePath, false))
-                {
-                    var workbookPart = spreadsheetDocument.WorkbookPart;
+                using var spreadsheetDocument = SpreadsheetDocument.Open(filePath, false);
+               
+                var workbookPart = spreadsheetDocument.WorkbookPart;
 
-                    if (workbookPart == null)
-                    {
-                        return bcsJson;
-                    }
-                    bcsJson = XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
+                if (workbookPart == null)
+                {
+                    return bcsJson;
                 }
+                bcsJson = XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
+               
                 return bcsJson;
             }
             catch (Exception ex)
@@ -54,16 +54,16 @@ namespace XlsToJson
             var bcsJson = string.Empty;
             try
             {
-                using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(fileContents, false))
-                {
-                    var workbookPart = spreadsheetDocument.WorkbookPart;
+                using var spreadsheetDocument = SpreadsheetDocument.Open(fileContents, false);
 
-                    if (workbookPart == null)
-                    {
-                        return bcsJson;
-                    }
-                    bcsJson = XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
+                var workbookPart = spreadsheetDocument.WorkbookPart;
+
+                if (workbookPart == null)
+                {
+                    return bcsJson;
                 }
+                bcsJson = XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
+                
                 return bcsJson;
             }
             catch (Exception ex)

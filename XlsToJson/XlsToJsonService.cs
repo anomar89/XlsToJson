@@ -1,5 +1,4 @@
-﻿using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
+﻿using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json;
 using System;
@@ -15,19 +14,17 @@ namespace XlsToJson
         {
             var bcsJson = string.Empty;
 
-            var filteredDefinedNames = new Dictionary<string, string>();
-
             var definedNameValuePairs = new Dictionary<string, string>();
 
-            if (workbookPart == null || workbookPart.Workbook == null || workbookPart.Workbook.DefinedNames == null)
+            if (workbookPart?.Workbook?.DefinedNames == null)
             {
                 return bcsJson;
             }
-            DefinedNames definedNames = workbookPart.Workbook.DefinedNames;
+            var definedNames = workbookPart.Workbook.DefinedNames;
 
-            filteredDefinedNames = FilterDefinedNamesWithRegex(definedNames, filters);
+            var filteredDefinedNames = FilterDefinedNamesWithRegex(definedNames, filters);
 
-            if (filteredDefinedNames == null || filteredDefinedNames.Count == 0)
+            if (filteredDefinedNames.Count == 0)
             {
                 return bcsJson;
             }
@@ -37,25 +34,25 @@ namespace XlsToJson
             {
                 return bcsJson;
             }
-            foreach (var sheet in filteredSheets)
+            foreach (var (key, value) in filteredSheets)
             {
-                var sheetData = GetSheetDataByRelationshipId(workbookPart, sheet.Value);
+                var sheetData = GetSheetDataByRelationshipId(workbookPart, value);
 
                 if (sheetData == null)
                 {
                     continue;
                 }
-                foreach (var definedName in filteredDefinedNames.Where(fdn => fdn.Value.Contains(sheet.Key)))
+                foreach (var (s, value1) in filteredDefinedNames.Where(fdn => fdn.Value.Contains(key)))
                 {
-                    if (!definedName.Value.Contains('$'))
+                    if (!value1.Contains('$'))
                     {
                         continue;
                     }
-                    var columnName = definedName.Value.Split('$', '$')[1];
+                    var columnName = value1.Split('$', '$')[1];
 
-                    var rowIndex = uint.Parse(definedName.Value[(definedName.Value.LastIndexOf("$") + 1)..]);
+                    var rowIndex = uint.Parse(value1[(value1.LastIndexOf("$", StringComparison.Ordinal) + 1)..]);
 
-                    Cell? cell = GetCell(sheetData, columnName, rowIndex, excludeHiddenRows, excludeHiddenColumns);
+                    var cell = GetCell(sheetData, columnName, rowIndex, excludeHiddenRows, excludeHiddenColumns);
 
                     if (cell == null)
                     {
@@ -63,25 +60,27 @@ namespace XlsToJson
                     }
                     var cellValue = GetCellValue(workbookPart, cell);
 
-                    if (definedName.Value.Contains(sheet.Key) && !string.IsNullOrEmpty(cellValue))
+                    if (value1.Contains(key) && !string.IsNullOrEmpty(cellValue))
                     {
-                        definedNameValuePairs.Add(definedName.Key, cellValue);
+                        definedNameValuePairs.Add(s, cellValue);
                     }
                 }
             }
-            if (definedNameValuePairs != null && definedNameValuePairs.Count > 0)
+            if (definedNameValuePairs.Count > 0)
             {
                 bcsJson = JsonConvert.SerializeObject(definedNameValuePairs);
             }
             return bcsJson;
         }
 
-        internal static Dictionary<string, string> FilterDefinedNamesWithRegex(DefinedNames definedNames, Regex[] filters)
+        internal static Dictionary<string, string> FilterDefinedNamesWithRegex(DefinedNames definedNames, Regex[]? filters)
         {
-            Dictionary<string, string> filteredDefinedNames = new Dictionary<string, string>();
+            var filteredDefinedNames = new Dictionary<string, string>();
 
-            foreach (DefinedName definedName in definedNames)
+            foreach (var openXmlElement in definedNames)
             {
+                var definedName = (DefinedName)openXmlElement;
+
                 if (definedName.Name == null || definedName.Name.Value == null)
                 {
                     continue;
@@ -106,34 +105,25 @@ namespace XlsToJson
 
         internal static string GetCellValue(WorkbookPart workbookPart, Cell cell)
         {
-            string cellValue = string.Empty;
+            var cellValue = string.Empty;
 
             if (cell.DataType != null)
             {
-                if (cell.DataType == CellValues.SharedString)
-                {
-                    if (int.TryParse(cell.InnerText, out int id))
-                    {
-                        SharedStringItem? item = GetSharedStringItemById(workbookPart, id);
+                if (cell.DataType != CellValues.SharedString) return cellValue;
 
-                        if (item == null)
-                        {
-                            return cellValue;
-                        }
-                        if (item.Text != null)
-                        {
-                            cellValue = item.Text.Text;
-                        }
-                        else if (item.InnerText != null)
-                        {
-                            cellValue = item.InnerText;
-                        }
-                        else if (item.InnerXml != null)
-                        {
-                            cellValue = item.InnerXml;
-                        }
-                    }
+                if (!int.TryParse(cell.InnerText, out var id)) return cellValue;
+
+                var item = GetSharedStringItemById(workbookPart, id);
+
+                if (item == null)
+                {
+                    return cellValue;
                 }
+                cellValue = item.Text != null ? item.Text.Text : item.InnerText;
+            }
+            else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsDate(workbookPart, cell))
+            {
+                cellValue = DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString();
             }
             else if (cell.CellValue != null)
             {
@@ -142,39 +132,55 @@ namespace XlsToJson
             return cellValue;
         }
 
+        internal static bool CheckIfFormatIsDate(WorkbookPart workbookPart, Cell cell)
+        {
+            var isDate = false;
+
+            var dateFormatCodes = new List<uint> { 166, 175, 179, 182, 183, 189, 193, 194, 196 };
+
+            var cellFormats = workbookPart.WorkbookStylesPart?.Stylesheet.CellFormats;
+
+            var cellFormat = cellFormats?.Descendants<CellFormat>().ElementAt(Convert.ToInt32(cell.StyleIndex.Value));
+
+            if (cellFormat.NumberFormatId != null! && dateFormatCodes.Contains(cellFormat.NumberFormatId))
+            {
+                isDate = true;
+            }
+            return isDate;
+        }
+
         internal static Dictionary<string, string>? GetSheetsForFilteredDefinedNames(WorkbookPart workbookPart, Dictionary<string, string> filteredDefinedNames)
         {
             var sheetsNameRelationshipIdPairs = new Dictionary<string, string>();
 
-            var nameAttribute = "name";
+            const string nameAttribute = "name";
 
-            var idAttribute = "id";
+            const string idAttribute = "id";
 
             if (workbookPart.Workbook.Sheets != null)
             {
                 foreach (var sheet in workbookPart.Workbook.Sheets)
                 {
-                    var sheetname = string.Empty;
+                    var sheetName = string.Empty;
 
                     var relationshipId = string.Empty;
 
-                    foreach (OpenXmlAttribute attr in sheet.GetAttributes())
+                    foreach (var attr in sheet.GetAttributes())
                     {
-                        if (attr.LocalName == nameAttribute)
+                        switch (attr.LocalName)
                         {
-                            sheetname = attr.Value;
-                        }
-                        if (attr.LocalName == idAttribute)
-                        {
-                            relationshipId = attr.Value;
+                            case nameAttribute:
+                                sheetName = attr.Value;
+                                break;
+
+                            case idAttribute:
+                                relationshipId = attr.Value;
+                                break;
                         }
                     }
-                    foreach (var dn in filteredDefinedNames.Values)
+                    foreach (var dn in filteredDefinedNames.Values.Where(dn => sheetName != null && dn.Contains(sheetName) & !sheetsNameRelationshipIdPairs.ContainsKey(sheetName)))
                     {
-                        if (dn.Contains(sheetname) & !sheetsNameRelationshipIdPairs.ContainsKey(sheetname))
-                        {
-                            sheetsNameRelationshipIdPairs.Add(sheetname, relationshipId);
-                        }
+                        sheetsNameRelationshipIdPairs.Add(sheetName, relationshipId);
                     }
                 }
             }
@@ -191,29 +197,30 @@ namespace XlsToJson
 
             foreach (var wp in workbookPart.WorksheetParts)
             {
-                string partRelationshipId = workbookPart.GetIdOfPart(wp);
+                var partRelationshipId = workbookPart.GetIdOfPart(wp);
 
                 if (partRelationshipId == relationshipId)
                 {
-                     worksheetPart = wp;
+                    worksheetPart = wp;
                 }
             }
             return worksheetPart;
         }
 
         internal static Cell? GetCell(WorksheetPart worksheetPart, string columnName, uint rowIndex, bool excludeHiddenRow, bool excludeHiddenColumn)
-        {   
+        {
             Cell? cell = null;
 
-            Row? row = GetRow(worksheetPart, rowIndex);
+            var row = GetRow(worksheetPart, rowIndex);
 
             if (row == null || excludeHiddenRow && CheckIfCellInHiddenRow(row))
             {
                 return cell;
             }
-            cell = row.Elements<Cell>().FirstOrDefault(c => c.CellReference != null && c.CellReference.Value != null && string.Equals(c.CellReference?.Value, columnName + rowIndex, StringComparison.CurrentCultureIgnoreCase));
-            
-            if (cell == null || (cell != null && excludeHiddenColumn && CheckIfCellInHiddenColumn(worksheetPart, row, cell)))
+            cell = row.Elements<Cell>().FirstOrDefault(c => c.CellReference != null && c.CellReference.Value != null
+                   && string.Equals(c.CellReference?.Value, columnName + rowIndex, StringComparison.CurrentCultureIgnoreCase));
+
+            if (cell == null || (excludeHiddenColumn && CheckIfCellInHiddenColumn(worksheetPart, row, cell)))
             {
                 return null;
             }
@@ -223,48 +230,44 @@ namespace XlsToJson
 
         internal static bool CheckIfCellInHiddenRow(Row row)
         {
-            bool isHidden = false;
+            var isHidden = row.Hidden! != null! && row.Hidden.Value;
 
-            if (row.Hidden != null && row.Hidden.Value == true)
-            {
-               isHidden = true;
-            }
             return isHidden;
         }
 
         internal static bool CheckIfCellInHiddenColumn(WorksheetPart worksheetPart, Row row, Cell cell)
         {
-            bool isHidden = false;
+            var isHidden = false;
 
             var columns = worksheetPart.Worksheet.Elements<Columns>().First();
 
             var hiddenColumnNames = new HashSet<string>();
 
-            foreach (var col in columns.Elements<Column>().Where(c => c.Hidden != null && c.Hidden.Value))
+            foreach (var col in columns.Elements<Column>().Where(c => c.Hidden! != null! && c.Hidden != null! && c.Hidden.Value))
             {
-                for (uint min = col.Min, max = col.Max; min <= max; min++)
+                for (uint min = col.Min!, max = col.Max!; min <= max; min++)
                 {
                     hiddenColumnNames.Add(GetColumnName(min));
                 }
             }
-            var column = cell.CellReference?.Value?.Replace(row.RowIndex?.ToString(), "");
+            var column = cell.CellReference?.Value?.Replace(row.RowIndex?.ToString()!, "");
 
             if (column != null && hiddenColumnNames.Contains(column))
             {
-               isHidden = true;
+                isHidden = true;
             }
             return isHidden;
         }
 
         internal static string GetColumnName(uint columnNumber)
         {
-            string columnName = "";
+            var columnName = "";
 
             while (columnNumber > 0)
             {
-                uint modulo = (columnNumber - 1) % 26;
+                var modulo = (columnNumber - 1) % 26;
 
-                columnName = Convert.ToChar(65 + modulo).ToString() + columnName;
+                columnName = Convert.ToChar(65 + modulo) + columnName;
 
                 columnNumber = (columnNumber - modulo) / 26;
             }
@@ -275,7 +278,7 @@ namespace XlsToJson
         {
             var sheetData = worksheetPart.Worksheet.Elements<SheetData>().First();
 
-            return sheetData.Elements<Row>().FirstOrDefault(r => r.RowIndex == rowIndex);
+            return sheetData.Elements<Row>().FirstOrDefault(r => r.RowIndex! == rowIndex);
         }
 
         internal static SharedStringItem? GetSharedStringItemById(WorkbookPart workbookPart, int id)
