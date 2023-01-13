@@ -1,4 +1,5 @@
 ﻿using DocumentFormat.OpenXml.Packaging;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -16,9 +17,9 @@ namespace XlsToJson
         /// <param name="excludeHiddenRows">A flag that excludes cells located on hidden rows from the JSON result. It is optional and true by default</param>
         /// <param name="excludeHiddenColumns">A flag that excludes cells located on hidden columns from the JSON result. It is optional and true by default</param>
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
-        public static string? ConvertXlsToJson(string filePath, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        public static JObject? ConvertXlsToJson(string filePath, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
-            var bcsJson = string.Empty;
+            var bcsJson = new JObject();
             try
             {
                 using var spreadsheetDocument = SpreadsheetDocument.Open(filePath, false);
@@ -49,9 +50,9 @@ namespace XlsToJson
         /// <param name="excludeHiddenRows">A flag that excludes cells located on hidden rows from the JSON result. It is optional and true by default</param>
         /// <param name="excludeHiddenColumns">A flag that excludes cells located on hidden columns from the JSON result. It is optional and true by default</param>
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
-        public static string? ConvertXlsToJson(MemoryStream fileContents, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        public static JObject? ConvertXlsToJson(MemoryStream fileContents, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
-            var bcsJson = string.Empty;
+            var bcsJson = new JObject();
             try
             {
                 using var spreadsheetDocument = SpreadsheetDocument.Open(fileContents, false);
@@ -72,7 +73,6 @@ namespace XlsToJson
 
                 return bcsJson;
             }
-
         }
     }
 }

@@ -1,8 +1,10 @@
 ﻿using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -10,11 +12,11 @@ namespace XlsToJson
 {
     internal static class XlsToJsonService
     {
-        internal static string? ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
+        internal static JObject? ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
         {
-            var bcsJson = string.Empty;
+            var bcsJson = new JObject();
 
-            var definedNameValuePairs = new Dictionary<string, string>();
+            var definedNameValuePairs = new Dictionary<string, JToken>();
 
             if (workbookPart?.Workbook?.DefinedNames == null)
             {
@@ -60,7 +62,7 @@ namespace XlsToJson
                     }
                     var cellValue = GetCellValue(workbookPart, cell);
 
-                    if (value1.Contains(key) && !string.IsNullOrEmpty(cellValue))
+                    if (value1.Contains(key) && cellValue != null)
                     {
                         definedNameValuePairs.Add(s, cellValue);
                     }
@@ -68,7 +70,7 @@ namespace XlsToJson
             }
             if (definedNameValuePairs.Count > 0)
             {
-                bcsJson = JsonConvert.SerializeObject(definedNameValuePairs);
+                bcsJson = JObject.Parse(JsonConvert.SerializeObject(definedNameValuePairs));
             }
             return bcsJson;
         }
@@ -103,9 +105,9 @@ namespace XlsToJson
             return filteredDefinedNames;
         }
 
-        internal static string GetCellValue(WorkbookPart workbookPart, Cell cell)
+        internal static JToken GetCellValue(WorkbookPart workbookPart, Cell cell)
         {
-            var cellValue = string.Empty;
+            JToken cellValue = null;
 
             if (cell.DataType != null)
             {
@@ -123,7 +125,20 @@ namespace XlsToJson
             }
             else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsDate(workbookPart, cell))
             {
-                cellValue = DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString();
+                cellValue = cell.CellValue.Text != "0"? DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString() : cell.CellValue.Text;
+            }
+            else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsNumber(workbookPart, cell))
+            {
+                float.TryParse(cell.CellValue.Text, NumberStyles.Any, new NumberFormatInfo() { NumberDecimalSeparator = "." }, out var result);
+
+                if (!NumberHasDecimals(result))
+                {
+                    cellValue = int.Parse(result.ToString());
+                }
+                else
+                {
+                    cellValue = result;
+                }
             }
             else if (cell.CellValue != null)
             {
@@ -132,21 +147,56 @@ namespace XlsToJson
             return cellValue;
         }
 
+        internal static bool NumberHasDecimals(float input)
+        {
+            var hasDecimals = true;
+
+            if (input % 1 == 0)
+            {
+                hasDecimals = false;
+            }
+            return hasDecimals;
+        }
+
         internal static bool CheckIfFormatIsDate(WorkbookPart workbookPart, Cell cell)
         {
             var isDate = false;
 
-            var dateFormatCodes = new List<uint> { 166, 175, 179, 182, 183, 189, 193, 194, 196 };
+            var cellFormats = workbookPart.WorkbookStylesPart?.Stylesheet.CellFormats;
+
+            var cellFormat = cellFormats?.Descendants<CellFormat>().ElementAt(Convert.ToInt32(cell.StyleIndex?.Value));
+
+            var numberingFormats = workbookPart.WorkbookStylesPart?.Stylesheet.NumberingFormats;
+
+            if (cellFormat.NumberFormatId != null)
+            {
+                var numberFormatId = cellFormat.NumberFormatId.Value;
+
+                var numberingFormat = numberingFormats.Cast<NumberingFormat>().SingleOrDefault(f => f.NumberFormatId?.Value == numberFormatId);
+
+                if (numberingFormat != null && numberingFormat.FormatCode?.Value != null && numberingFormat.FormatCode.Value.Contains("yy"))
+                {
+                    isDate = true;
+                }
+            }
+            return isDate;
+        }
+
+        internal static bool CheckIfFormatIsNumber(WorkbookPart workbookPart, Cell cell)
+        {
+            var isNumber = false;
+
+            var numberFormatIds = new List<uint> {0, 1, 2, 3, 4, 9, 10, 171, 173, 201, 202, 205, 207 };
 
             var cellFormats = workbookPart.WorkbookStylesPart?.Stylesheet.CellFormats;
 
             var cellFormat = cellFormats?.Descendants<CellFormat>().ElementAt(Convert.ToInt32(cell.StyleIndex.Value));
 
-            if (cellFormat.NumberFormatId != null! && dateFormatCodes.Contains(cellFormat.NumberFormatId))
+            if (cellFormat.NumberFormatId != null && numberFormatIds.Contains(cellFormat.NumberFormatId))
             {
-                isDate = true;
+                isNumber = true;
             }
-            return isDate;
+            return isNumber;
         }
 
         internal static Dictionary<string, string>? GetSheetsForFilteredDefinedNames(WorkbookPart workbookPart, Dictionary<string, string> filteredDefinedNames)
