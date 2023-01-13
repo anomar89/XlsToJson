@@ -129,7 +129,7 @@ namespace XlsToJson
             }
             else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsNumber(workbookPart, cell))
             {
-                float.TryParse(cell.CellValue.Text, NumberStyles.Any, new NumberFormatInfo() { NumberDecimalSeparator = "." }, out var result);
+                float.TryParse(cell.CellValue.Text,  out var result);
 
                 if (!NumberHasDecimals(result))
                 {

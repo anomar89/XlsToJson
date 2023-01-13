@@ -2,8 +2,10 @@
 using Newtonsoft.Json.Linq;
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace XlsToJson
 {
@@ -19,6 +21,8 @@ namespace XlsToJson
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
         public static JObject? ConvertXlsToJson(string filePath, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
+
             var bcsJson = new JObject();
             try
             {
@@ -52,6 +56,8 @@ namespace XlsToJson
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
         public static JObject? ConvertXlsToJson(MemoryStream fileContents, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
+
             var bcsJson = new JObject();
             try
             {
