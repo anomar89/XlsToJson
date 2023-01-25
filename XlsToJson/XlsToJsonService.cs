@@ -125,11 +125,11 @@ namespace XlsToJson
             }
             else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsDate(workbookPart, cell))
             {
-                cellValue = cell.CellValue.Text != "0"? DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString() : cell.CellValue.Text;
+                cellValue = cell.CellValue.Text != "0" ? DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString() : cell.CellValue.Text;
             }
             else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsNumber(workbookPart, cell))
             {
-                float.TryParse(cell.CellValue.Text,  out var result);
+                float.TryParse(cell.CellValue.Text, out var result);
 
                 if (!NumberHasDecimals(result))
                 {
@@ -174,7 +174,7 @@ namespace XlsToJson
 
                 var numberingFormat = numberingFormats.Cast<NumberingFormat>().SingleOrDefault(f => f.NumberFormatId?.Value == numberFormatId);
 
-                if (numberingFormat != null && numberingFormat.FormatCode?.Value != null && numberingFormat.FormatCode.Value.Contains("yy"))
+                if ((numberFormatId >= 14 && numberFormatId <= 22) || (numberFormatId >= 165u && numberFormatId <= 180u))
                 {
                     isDate = true;
                 }
@@ -186,7 +186,7 @@ namespace XlsToJson
         {
             var isNumber = false;
 
-            var numberFormatIds = new List<uint> {0, 1, 2, 3, 4, 9, 10, 171, 173, 201, 202, 205, 207 };
+            var numberFormatIds = new List<uint> { 0, 1, 2, 3, 4, 9, 10, 171, 173, 201, 202, 205, 207 };
 
             var cellFormats = workbookPart.WorkbookStylesPart?.Stylesheet.CellFormats;
 
