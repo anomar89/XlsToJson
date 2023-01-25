@@ -8,3 +8,6 @@
 /TestXlsToJson/bin/Release/net6.0
 /TestXlsToJson/obj
 /XlsToJson.sln.DotSettings.user
+/XlsToJson.Test/obj
+/XlsToJson.Test/bin/Debug/net6.0
+/.vs/ProjectEvaluation
