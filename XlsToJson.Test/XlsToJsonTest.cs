@@ -21,15 +21,13 @@ namespace XlsToJson.Test
         {
             byte[] fileContent = File.ReadAllBytes(path);
 
-            using (MemoryStream ms = new MemoryStream(fileContent))
-            {
-                var json = XlsToJson.ConvertXlsToJson(ms);
+            using MemoryStream ms = new(fileContent);
+            var json = XlsToJson.ConvertXlsToJson(ms);
 
-                Assert.IsNotNull(json);
-                Assert.IsTrue(json.HasValues);
+            Assert.IsNotNull(json);
+            Assert.IsTrue(json.HasValues);
 
-                Validation.ValidateDateTime(json);
-            }
+            Validation.ValidateDateTime(json);
         }
     }
 }

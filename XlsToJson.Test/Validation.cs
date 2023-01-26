@@ -2,7 +2,7 @@
 {
     internal class Validation
     {
-        private static DateTime _defaultDateValue = new DateTime(2023, 01, 22);
+        private static readonly DateTime _defaultDateValue = new(2023, 01, 22);
 
         /// <summary>
         /// Check if input dates are valid
@@ -18,7 +18,7 @@
             {
                 foreach (var date in inputDates)
                 {
-                    DateTime.TryParse(date.Value.ToString(), out var dateValue);
+                    _ = DateTime.TryParse(date.Value.ToString(), out var dateValue);
 
                     if (dateValue.Date == default(DateTime).Date)
                     {
