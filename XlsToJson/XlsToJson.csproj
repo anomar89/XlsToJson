@@ -6,7 +6,7 @@
     <Authors>Hruska Ramona</Authors>
     <Description>Extracts the list of defined names and their associated values from an Excel file based on the provided regex filtering and returns a JSON with them</Description>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <PackageProjectUrl>https://github.com/anomar89/XlsToJson</PackageProjectUrl>
   </PropertyGroup>
 
