@@ -173,7 +173,7 @@ namespace XlsToJson
 
                 var numberingFormat = numberingFormats.Cast<NumberingFormat>().SingleOrDefault(f => f.NumberFormatId?.Value == numberFormatId);
 
-                if ((numberFormatId >= 14 && numberFormatId <= 22) || (numberFormatId >= 165u && numberFormatId <= 180u))
+                if (numberingFormat != null && numberingFormat.FormatCode?.Value != null && numberingFormat.FormatCode.Value.Contains("yy"))
                 {
                     isDate = true;
                 }
