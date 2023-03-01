@@ -136,7 +136,7 @@ namespace XlsToJson
                 }
                 else
                 {
-                    cellValue = result;
+                    cellValue = Math.Round(result, 3);
                 }
             }
             else if (cell.CellValue != null)
@@ -185,7 +185,7 @@ namespace XlsToJson
         {
             var isNumber = false;
 
-            var numberFormatIds = new List<uint> { 0, 1, 2, 3, 4, 9, 10, 171, 173, 201, 202, 205, 207 };
+            var numberFormatIds = new List<uint> { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 167, 169, 171, 173, 200, 201, 202, 205, 207 };
 
             var cellFormats = workbookPart.WorkbookStylesPart?.Stylesheet.CellFormats;
 

@@ -12,3 +12,9 @@
 /XlsToJson.Test/bin/Debug/net6.0
 /.vs/ProjectEvaluation
 /XlsToJson.Test/bin/Release/net6.0
+/TestNugetPackage/bin/Debug/net6.0
+/TestNugetPackage/obj/Debug/net6.0
+/TestNugetPackage/obj/Release/net6.0
+/TestNugetPackage/obj
+/TestNugetPackage/TestNugetPackage.csproj
+/TestNugetPackage
