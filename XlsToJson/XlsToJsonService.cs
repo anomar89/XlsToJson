@@ -128,7 +128,7 @@ namespace XlsToJson
             }
             else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsNumber(workbookPart, cell))
             {
-                float.TryParse(cell.CellValue.Text, out var result);
+                decimal.TryParse(cell.CellValue.Text, out var result);
 
                 if (!NumberHasDecimals(result))
                 {
@@ -146,7 +146,7 @@ namespace XlsToJson
             return cellValue;
         }
 
-        internal static bool NumberHasDecimals(float input)
+        internal static bool NumberHasDecimals(decimal input)
         {
             var hasDecimals = true;
 
