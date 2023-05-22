@@ -21,7 +21,13 @@ namespace XlsToJson
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
         public static JObject? ConvertXlsToJson(string filePath, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
-            Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
+            CultureInfo cultureInfo = new CultureInfo("en-US");
+            NumberFormatInfo numberFormat = new NumberFormatInfo
+            {
+                NumberDecimalDigits = 3
+            };
+            cultureInfo.NumberFormat = numberFormat;
+            Thread.CurrentThread.CurrentCulture = cultureInfo;
 
             var bcsJson = new JObject();
             try
