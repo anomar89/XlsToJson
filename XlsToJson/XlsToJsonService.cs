@@ -289,23 +289,26 @@ namespace XlsToJson
         internal static bool CheckIfCellInHiddenColumn(WorksheetPart worksheetPart, Row row, Cell cell)
         {
             var isHidden = false;
-
-            var columns = worksheetPart.Worksheet.Elements<Columns>().First();
-
+            Columns? columns = null;
             var hiddenColumnNames = new HashSet<string>();
 
-            foreach (var col in columns.Elements<Column>().Where(c => c.Hidden! != null! && c.Hidden != null! && c.Hidden.Value))
+            if (worksheetPart.Worksheet.GetFirstChild<Columns>() != null)
             {
-                for (uint min = col.Min!, max = col.Max!; min <= max; min++)
-                {
-                    hiddenColumnNames.Add(GetColumnName(min));
-                }
-            }
-            var column = cell.CellReference?.Value?.Replace(row.RowIndex?.ToString()!, "");
+                columns = worksheetPart.Worksheet.Elements<Columns>().First();
 
-            if (column != null && hiddenColumnNames.Contains(column))
-            {
-                isHidden = true;
+                foreach (var col in columns.Elements<Column>().Where(c => c.Hidden! != null! && c.Hidden != null! && c.Hidden.Value))
+                {
+                    for (uint min = col.Min!, max = col.Max!; min <= max; min++)
+                    {
+                        hiddenColumnNames.Add(GetColumnName(min));
+                    }
+                }
+                var column = cell.CellReference?.Value?.Replace(row.RowIndex?.ToString()!, "");
+
+                if (column != null && hiddenColumnNames.Contains(column))
+                {
+                    isHidden = true;
+                }
             }
             return isHidden;
         }

@@ -8,7 +8,7 @@ namespace XlsToJson.Test
         [TestMethod]
         public void ConvertXlsToJson_ByFilePath_Success()
         {
-            var json = XlsToJson.ConvertXlsToJson(path);
+            var json = XlsToJson.ConvertXlsToJson(path, out string errorMessage);
 
             Assert.IsNotNull(json);
             Assert.IsTrue(json.HasValues);
@@ -22,7 +22,7 @@ namespace XlsToJson.Test
             byte[] fileContent = File.ReadAllBytes(path);
 
             using MemoryStream ms = new(fileContent);
-            var json = XlsToJson.ConvertXlsToJson(ms);
+            var json = XlsToJson.ConvertXlsToJson(ms, out string errorMessage);
 
             Assert.IsNotNull(json);
             Assert.IsTrue(json.HasValues);

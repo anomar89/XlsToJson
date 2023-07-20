@@ -19,7 +19,7 @@ namespace XlsToJson
         /// <param name="excludeHiddenRows">A flag that excludes cells located on hidden rows from the JSON result. It is optional and true by default</param>
         /// <param name="excludeHiddenColumns">A flag that excludes cells located on hidden columns from the JSON result. It is optional and true by default</param>
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
-        public static JObject? ConvertXlsToJson(string filePath, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        public static JObject? ConvertXlsToJson(string filePath, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
             CultureInfo cultureInfo = new CultureInfo("en-US");
             NumberFormatInfo numberFormat = new NumberFormatInfo
@@ -29,6 +29,7 @@ namespace XlsToJson
             cultureInfo.NumberFormat = numberFormat;
             Thread.CurrentThread.CurrentCulture = cultureInfo;
 
+            errorMessage = string.Empty;
             var bcsJson = new JObject();
             try
             {
@@ -46,7 +47,7 @@ namespace XlsToJson
             }
             catch (Exception ex)
             {
-                Trace.TraceError(ex.Message);
+                errorMessage = "The parsing of the BCS failed with the error: " + ex.Message + "Details: " + ex.StackTrace;
 
                 return bcsJson;
             }
@@ -60,10 +61,17 @@ namespace XlsToJson
         /// <param name="excludeHiddenRows">A flag that excludes cells located on hidden rows from the JSON result. It is optional and true by default</param>
         /// <param name="excludeHiddenColumns">A flag that excludes cells located on hidden columns from the JSON result. It is optional and true by default</param>
         ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
-        public static JObject? ConvertXlsToJson(MemoryStream fileContents, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        public static JObject? ConvertXlsToJson(MemoryStream fileContents, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
-            Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
+            CultureInfo cultureInfo = new CultureInfo("en-US");
+            NumberFormatInfo numberFormat = new NumberFormatInfo
+            {
+                NumberDecimalDigits = 3
+            };
+            cultureInfo.NumberFormat = numberFormat;
+            Thread.CurrentThread.CurrentCulture = cultureInfo;
 
+            errorMessage = string.Empty;
             var bcsJson = new JObject();
             try
             {
@@ -81,7 +89,7 @@ namespace XlsToJson
             }
             catch (Exception ex)
             {
-                Trace.TraceError(ex.Message);
+                errorMessage = "The parsing of the BCS failed with the error: " + ex.Message + "Details: " + ex.StackTrace;
 
                 return bcsJson;
             }
