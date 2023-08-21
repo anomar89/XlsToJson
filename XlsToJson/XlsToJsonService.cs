@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -11,67 +12,60 @@ namespace XlsToJson
 {
     internal static class XlsToJsonService
     {
-        internal static JObject? ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
+        internal static JObject ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
         {
-            var bcsJson = new JObject();
+            if (workbookPart?.Workbook?.DefinedNames == null) return new JObject();
 
-            var definedNameValuePairs = new Dictionary<string, JToken>();
+            var filteredDefinedNames = FilterDefinedNamesWithRegex(workbookPart.Workbook.DefinedNames, filters);
 
-            if (workbookPart?.Workbook?.DefinedNames == null)
-            {
-                return bcsJson;
-            }
-            var definedNames = workbookPart.Workbook.DefinedNames;
+            if (!filteredDefinedNames.Any()) return new JObject();
 
-            var filteredDefinedNames = FilterDefinedNamesWithRegex(definedNames, filters);
-
-            if (filteredDefinedNames.Count == 0)
-            {
-                return bcsJson;
-            }
             var filteredSheets = GetSheetsForFilteredDefinedNames(workbookPart, filteredDefinedNames);
 
-            if (filteredSheets == null || filteredSheets.Count == 0)
-            {
-                return bcsJson;
-            }
+            if (filteredSheets == null || !filteredSheets.Any()) return new JObject();
+
+            var definedNameValuePairs = ExtractDefinedNameValuePairs(workbookPart, filteredDefinedNames, filteredSheets, excludeHiddenRows, excludeHiddenColumns);
+
+            return definedNameValuePairs.Any()
+                ? JObject.Parse(JsonConvert.SerializeObject(definedNameValuePairs))
+                : new JObject();
+        }
+
+        private static Dictionary<string, JToken> ExtractDefinedNameValuePairs(WorkbookPart workbookPart, Dictionary<string, string> filteredDefinedNames,
+                                                                               Dictionary<string, string> filteredSheets, bool excludeHiddenRows, bool excludeHiddenColumns)
+        {
+            var results = new Dictionary<string, JToken>();
+
             foreach (var (key, value) in filteredSheets)
             {
                 var sheetData = GetSheetDataByRelationshipId(workbookPart, value);
 
-                if (sheetData == null)
-                {
-                    continue;
-                }
-                foreach (var (s, value1) in filteredDefinedNames.Where(fdn => fdn.Value.Contains(key)))
-                {
-                    if (!value1.Contains('$'))
-                    {
-                        continue;
-                    }
-                    var columnName = value1.Split('$', '$')[1];
+                if (sheetData == null) continue;
 
-                    var rowIndex = uint.Parse(value1[(value1.LastIndexOf("$", StringComparison.Ordinal) + 1)..]);
+                var matchingNames = filteredDefinedNames
+                    .Where(fdn => fdn.Value.Contains(key))
+                    .Where(fdn => fdn.Value.Contains("$"))
+                    .ToList();
+
+                foreach (var (name, cellReference) in matchingNames)
+                {
+                    var columnName = cellReference.Split('$', '$')[1];
+
+                    var rowIndex = uint.Parse(cellReference[(cellReference.LastIndexOf("$", StringComparison.Ordinal) + 1)..]);
 
                     var cell = GetCell(sheetData, columnName, rowIndex, excludeHiddenRows, excludeHiddenColumns);
 
-                    if (cell == null)
-                    {
-                        continue;
-                    }
+                    if (cell == null) continue;
+
                     var cellValue = GetCellValue(workbookPart, cell);
 
-                    if (value1.Contains(key) && cellValue != null)
+                    if (cellValue != null)
                     {
-                        definedNameValuePairs.Add(s, cellValue);
+                        results[name] = cellValue;
                     }
                 }
             }
-            if (definedNameValuePairs.Count > 0)
-            {
-                bcsJson = JObject.Parse(JsonConvert.SerializeObject(definedNameValuePairs));
-            }
-            return bcsJson;
+            return results;
         }
 
         internal static Dictionary<string, string> FilterDefinedNamesWithRegex(DefinedNames definedNames, Regex[]? filters)
@@ -104,44 +98,50 @@ namespace XlsToJson
             return filteredDefinedNames;
         }
 
-        internal static JToken GetCellValue(WorkbookPart workbookPart, Cell cell)
+        internal static JToken? GetCellValue(WorkbookPart workbookPart, Cell cell)
         {
-            JToken cellValue = null;
-
-            if (cell.DataType != null)
+            JToken? cellValue = null;
+            try
             {
-                if (cell.DataType != CellValues.SharedString) return cellValue;
-
-                if (!int.TryParse(cell.InnerText, out var id)) return cellValue;
-
-                var item = GetSharedStringItemById(workbookPart, id);
-
-                if (item == null)
+                if (cell.DataType != null)
                 {
-                    return cellValue;
-                }
-                cellValue = item.Text != null ? item.Text.Text : item.InnerText;
-            }
-            else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsDate(workbookPart, cell))
-            {
-                cellValue = cell.CellValue.Text != "0" ? DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString() : cell.CellValue.Text;
-            }
-            else if (cell.StyleIndex != null && cell.CellValue != null && CheckIfFormatIsNumber(workbookPart, cell))
-            {
-                decimal.TryParse(cell.CellValue.Text, out var result);
+                    if (cell.DataType != CellValues.SharedString) return cellValue;
 
-                if (!NumberHasDecimals(result))
-                {
-                    cellValue = int.Parse(result.ToString());
+                    if (!int.TryParse(cell.InnerText, out var id)) return cellValue;
+
+                    var item = GetSharedStringItemById(workbookPart, id);
+
+                    if (item == null)
+                    {
+                        return cellValue;
+                    }
+                    cellValue = item.Text != null ? item.Text.Text : item.InnerText;
                 }
-                else
+                else if (cell.StyleIndex! != null && cell.CellValue != null && CheckIfFormatIsDate(workbookPart, cell))
                 {
-                    cellValue = Math.Round(result, 3);
+                    cellValue = cell.CellValue.Text != "0" ? DateTime.FromOADate(Convert.ToDouble(cell.CellValue.Text)).ToShortDateString() : cell.CellValue.Text;
+                }
+                else if (cell.StyleIndex! != null && cell.CellValue != null && CheckIfFormatIsNumber(workbookPart, cell))
+                {
+                    decimal.TryParse(cell.CellValue.Text, out var result);
+
+                    if (!NumberHasDecimals(result))
+                    {
+                        cellValue = int.Parse(result.ToString());
+                    }
+                    else
+                    {
+                        cellValue = Math.Round(result, 3);
+                    }
+                }
+                else if (cell.CellValue != null)
+                {
+                    cellValue = cell.CellValue.InnerText;
                 }
             }
-            else if (cell.CellValue != null)
+            catch (Exception ex)
             {
-                cellValue = cell.CellValue.InnerText;
+                throw new Exception($"Error occurred in cell {cell.CellReference}: {ex.Message} ", ex);
             }
             return cellValue;
         }
@@ -167,7 +167,7 @@ namespace XlsToJson
 
             var numberingFormats = workbookPart.WorkbookStylesPart?.Stylesheet.NumberingFormats;
 
-            if (cellFormat.NumberFormatId != null)
+            if (cellFormat?.NumberFormatId! != null)
             {
                 var numberFormatId = cellFormat.NumberFormatId.Value;
 
@@ -185,13 +185,13 @@ namespace XlsToJson
         {
             var isNumber = false;
 
-            var numberFormatIds = new List<uint> { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 164, 167, 169, 171, 173, 198, 199, 200, 201, 202, 203, 204, 205, 207 };
+            var numberFormatIds = new List<uint> { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 164, 166, 167, 168, 169, 171, 173, 197, 198, 199, 200, 201, 202, 203, 204, 205, 207 };
 
             var cellFormats = workbookPart.WorkbookStylesPart?.Stylesheet.CellFormats;
 
-            var cellFormat = cellFormats?.Descendants<CellFormat>().ElementAt(Convert.ToInt32(cell.StyleIndex.Value));
+            var cellFormat = cellFormats?.Descendants<CellFormat>().ElementAt(Convert.ToInt32(cell.StyleIndex!.Value));
 
-            if (cellFormat.NumberFormatId != null && numberFormatIds.Contains(cellFormat.NumberFormatId))
+            if (cellFormat?.NumberFormatId! != null && numberFormatIds.Contains(cellFormat.NumberFormatId))
             {
                 isNumber = true;
             }
@@ -336,6 +336,18 @@ namespace XlsToJson
         internal static SharedStringItem? GetSharedStringItemById(WorkbookPart workbookPart, int id)
         {
             return workbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ElementAt(id);
+        }
+
+        internal static CultureInfo GetCultureWithCustomNumberFormat()
+        {
+            CultureInfo cultureInfo = new CultureInfo("en-US");
+            NumberFormatInfo numberFormat = new NumberFormatInfo
+            {
+                NumberDecimalDigits = 3
+            };
+            cultureInfo.NumberFormat = numberFormat;
+
+            return cultureInfo;
         }
     }
 }

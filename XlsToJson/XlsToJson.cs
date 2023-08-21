@@ -1,8 +1,6 @@
 ﻿using DocumentFormat.OpenXml.Packaging;
 using Newtonsoft.Json.Linq;
 using System;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -11,88 +9,47 @@ namespace XlsToJson
 {
     public static class XlsToJson
     {
-        /// <summary>
-        /// Extracts the filtered list of defined names and their associated values from a XLS file stored on the disk and returns a JSON result
-        /// </summary>
-        /// <param name="filePath">A path to the XLS file to process</param>
-        /// <param name="filters">A collection of regular expressions used for filtering the defined names. It is optional and, if left null, all the defined names will be included in the JSON result except the ones without associated values</param>
-        /// <param name="excludeHiddenRows">A flag that excludes cells located on hidden rows from the JSON result. It is optional and true by default</param>
-        /// <param name="excludeHiddenColumns">A flag that excludes cells located on hidden columns from the JSON result. It is optional and true by default</param>
-        ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
-        public static JObject? ConvertXlsToJson(string filePath, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        public static JObject ConvertXlsToJson(string filePath, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
         {
-            CultureInfo cultureInfo = new CultureInfo("en-US");
-            NumberFormatInfo numberFormat = new NumberFormatInfo
-            {
-                NumberDecimalDigits = 3
-            };
-            cultureInfo.NumberFormat = numberFormat;
-            Thread.CurrentThread.CurrentCulture = cultureInfo;
+            return ConvertXlsToJsonObject(() => SpreadsheetDocument.Open(filePath, false), out errorMessage, filters, excludeHiddenRows, excludeHiddenColumns);
+        }
+
+        public static JObject ConvertXlsToJson(MemoryStream fileContents, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        {
+            return ConvertXlsToJsonObject(() => SpreadsheetDocument.Open(fileContents, false), out errorMessage, filters, excludeHiddenRows, excludeHiddenColumns);
+        }
+
+        private static JObject ConvertXlsToJsonObject(Func<SpreadsheetDocument> getDocument, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        {
+            Thread.CurrentThread.CurrentCulture = XlsToJsonService.GetCultureWithCustomNumberFormat();
 
             errorMessage = string.Empty;
             var bcsJson = new JObject();
+
             try
             {
-                using var spreadsheetDocument = SpreadsheetDocument.Open(filePath, false);
-               
-                var workbookPart = spreadsheetDocument.WorkbookPart;
+                using var spreadsheetDocument = getDocument();
 
-                if (workbookPart == null)
-                {
-                    return bcsJson;
-                }
-                bcsJson = XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
-               
-                return bcsJson;
+                bcsJson = ProcessDocument(spreadsheetDocument, filters, excludeHiddenRows, excludeHiddenColumns);
             }
             catch (Exception ex)
             {
-                errorMessage = "The parsing of the BCS failed with the error: " + ex.Message + "Details: " + ex.StackTrace;
-
-                return bcsJson;
+                errorMessage = $"The parsing of the BCS failed with the error: {ex.Message} Details: {ex.StackTrace}";
             }
+            return bcsJson;
         }
 
-        /// <summary>
-        /// Extracts the filtered list of defined names and their associated values from a XLS file stored in memory and returns a JSON result
-        /// </summary>
-        /// <param name="fileContents">A memory stream containing the XLS file to process</param>
-        /// <param name="filters">A collection of regular expressions used for filtering the defined names. It is optional and, if left null, all the defined names will be included in the JSON result except the ones without associated values</param>
-        /// <param name="excludeHiddenRows">A flag that excludes cells located on hidden rows from the JSON result. It is optional and true by default</param>
-        /// <param name="excludeHiddenColumns">A flag that excludes cells located on hidden columns from the JSON result. It is optional and true by default</param>
-        ///<returns>It returns a nullable string containing the filtered defined names with their associated values in the JSON format</returns>
-        public static JObject? ConvertXlsToJson(MemoryStream fileContents, out string errorMessage, Regex[]? filters = null, bool excludeHiddenRows = true, bool excludeHiddenColumns = true)
+        private static JObject ProcessDocument(SpreadsheetDocument spreadsheetDocument, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
         {
-            CultureInfo cultureInfo = new CultureInfo("en-US");
-            NumberFormatInfo numberFormat = new NumberFormatInfo
+            var workbookPart = spreadsheetDocument.WorkbookPart;
+
+            if (workbookPart == null)
             {
-                NumberDecimalDigits = 3
-            };
-            cultureInfo.NumberFormat = numberFormat;
-            Thread.CurrentThread.CurrentCulture = cultureInfo;
-
-            errorMessage = string.Empty;
-            var bcsJson = new JObject();
-            try
-            {
-                using var spreadsheetDocument = SpreadsheetDocument.Open(fileContents, false);
-
-                var workbookPart = spreadsheetDocument.WorkbookPart;
-
-                if (workbookPart == null)
-                {
-                    return bcsJson;
-                }
-                bcsJson = XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
-                
-                return bcsJson;
+                return new JObject();
             }
-            catch (Exception ex)
-            {
-                errorMessage = "The parsing of the BCS failed with the error: " + ex.Message + "Details: " + ex.StackTrace;
-
-                return bcsJson;
-            }
+            return XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
         }
+
+      
     }
 }
