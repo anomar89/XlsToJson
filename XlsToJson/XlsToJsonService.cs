@@ -49,20 +49,24 @@ namespace XlsToJson
 
                 foreach (var (name, cellReference) in matchingNames)
                 {
-                    var columnName = cellReference.Split('$', '$')[1];
-
-                    var rowIndex = uint.Parse(cellReference[(cellReference.LastIndexOf("$", StringComparison.Ordinal) + 1)..]);
-
-                    var cell = GetCell(sheetData, columnName, rowIndex, excludeHiddenRows, excludeHiddenColumns);
-
-                    if (cell == null) continue;
-
-                    var cellValue = GetCellValue(workbookPart, cell);
-
-                    if (cellValue != null)
+                    try
                     {
-                        results[name] = cellValue;
+                        var columnName = cellReference.Split('$', '$')[1];
+
+                        var rowIndex = uint.Parse(cellReference[(cellReference.LastIndexOf("$", StringComparison.Ordinal) + 1)..]);
+
+                        var cell = GetCell(sheetData, columnName, rowIndex, excludeHiddenRows, excludeHiddenColumns);
+
+                        if (cell == null) continue;
+
+                        var cellValue = GetCellValue(workbookPart, cell);
+
+                        if (cellValue != null)
+                        {
+                            results[name] = cellValue;
+                        }
                     }
+                    catch {}
                 }
             }
             return results;
@@ -101,8 +105,7 @@ namespace XlsToJson
         internal static JToken? GetCellValue(WorkbookPart workbookPart, Cell cell)
         {
             JToken? cellValue = null;
-            try
-            {
+            
                 if (cell.DataType != null)
                 {
                     if (cell.DataType != CellValues.SharedString) return cellValue;
@@ -138,11 +141,6 @@ namespace XlsToJson
                 {
                     cellValue = cell.CellValue.InnerText;
                 }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Error occurred in cell {cell.CellReference}: {ex.Message} ", ex);
-            }
             return cellValue;
         }
 
