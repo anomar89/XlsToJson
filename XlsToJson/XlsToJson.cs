@@ -30,24 +30,28 @@ namespace XlsToJson
             {
                 using var spreadsheetDocument = getDocument();
 
-                bcsJson = ProcessDocument(spreadsheetDocument, filters, excludeHiddenRows, excludeHiddenColumns);
+                bcsJson = ProcessDocument(spreadsheetDocument, filters, excludeHiddenRows, excludeHiddenColumns, out string cellsExceptions);
+
+                errorMessage = cellsExceptions;
             }
             catch (Exception ex)
             {
-                errorMessage = $"The parsing of the BCS failed with the error: {ex.Message} Details: {ex.StackTrace}";
+                errorMessage += $"\nThe parsing of the BCS failed with the error: {ex.Message} Details: {ex.StackTrace}";
             }
             return bcsJson;
         }
 
-        private static JObject ProcessDocument(SpreadsheetDocument spreadsheetDocument, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
+        private static JObject ProcessDocument(SpreadsheetDocument spreadsheetDocument, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns, out string cellsExceptions)
         {
+            cellsExceptions = string.Empty;
+
             var workbookPart = spreadsheetDocument.WorkbookPart;
 
             if (workbookPart == null)
             {
                 return new JObject();
             }
-            return XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns);
+            return XlsToJsonService.ProcessDocument(workbookPart, filters, excludeHiddenRows, excludeHiddenColumns, out cellsExceptions);
         }
 
       

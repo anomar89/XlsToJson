@@ -6,35 +6,47 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace XlsToJson
 {
     internal static class XlsToJsonService
     {
-        internal static JObject ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns)
+        internal static JObject ProcessDocument(WorkbookPart workbookPart, Regex[]? filters, bool excludeHiddenRows, bool excludeHiddenColumns, out string cellsExceptions)
         {
+            cellsExceptions = string.Empty;
+
             if (workbookPart?.Workbook?.DefinedNames == null) return new JObject();
 
-            var filteredDefinedNames = FilterDefinedNamesWithRegex(workbookPart.Workbook.DefinedNames, filters);
-
+            var filteredDefinedNames = FilterDefinedNamesWithRegex(GetDefinedNames(workbookPart), filters);
+           
             if (!filteredDefinedNames.Any()) return new JObject();
 
             var filteredSheets = GetSheetsForFilteredDefinedNames(workbookPart, filteredDefinedNames);
 
             if (filteredSheets == null || !filteredSheets.Any()) return new JObject();
 
-            var definedNameValuePairs = ExtractDefinedNameValuePairs(workbookPart, filteredDefinedNames, filteredSheets, excludeHiddenRows, excludeHiddenColumns);
+            var definedNameValuePairs = ExtractDefinedNameValuePairs(workbookPart, filteredDefinedNames, filteredSheets, excludeHiddenRows, excludeHiddenColumns, out StringBuilder cellsExceptionMessages);
+
+            cellsExceptions = cellsExceptionMessages.ToString();
 
             return definedNameValuePairs.Any()
                 ? JObject.Parse(JsonConvert.SerializeObject(definedNameValuePairs))
                 : new JObject();
         }
 
+        internal static List<DefinedName> GetDefinedNames(WorkbookPart workbookPart)
+        {
+            var definedNames = workbookPart.Workbook.Descendants<DefinedName>().Where(df => !string.Equals(df.InnerText, "#REF!", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            return definedNames;
+        }
         private static Dictionary<string, JToken> ExtractDefinedNameValuePairs(WorkbookPart workbookPart, Dictionary<string, string> filteredDefinedNames,
-                                                                               Dictionary<string, string> filteredSheets, bool excludeHiddenRows, bool excludeHiddenColumns)
+                                                                               Dictionary<string, string> filteredSheets, bool excludeHiddenRows, bool excludeHiddenColumns, out StringBuilder cellsExceptionMessages)
         {
             var results = new Dictionary<string, JToken>();
+            cellsExceptionMessages = new StringBuilder();
 
             foreach (var (key, value) in filteredSheets)
             {
@@ -66,20 +78,21 @@ namespace XlsToJson
                             results[name] = cellValue;
                         }
                     }
-                    catch {}
+                    catch(Exception ex)
+                    {
+                        cellsExceptionMessages.AppendLine($"Error occurred in cell {name} from location {cellReference} : {ex.Message} ");
+                    }
                 }
             }
             return results;
         }
 
-        internal static Dictionary<string, string> FilterDefinedNamesWithRegex(DefinedNames definedNames, Regex[]? filters)
+        internal static Dictionary<string, string> FilterDefinedNamesWithRegex(List<DefinedName> definedNames, Regex[]? filters)
         {
             var filteredDefinedNames = new Dictionary<string, string>();
 
-            foreach (var openXmlElement in definedNames)
-            {
-                var definedName = (DefinedName)openXmlElement;
-
+            foreach (var definedName in definedNames)
+            { 
                 if (definedName.Name == null || definedName.Name.Value == null)
                 {
                     continue;
@@ -105,7 +118,7 @@ namespace XlsToJson
         internal static JToken? GetCellValue(WorkbookPart workbookPart, Cell cell)
         {
             JToken? cellValue = null;
-            
+           
                 if (cell.DataType != null)
                 {
                     if (cell.DataType != CellValues.SharedString) return cellValue;
